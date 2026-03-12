@@ -1,6 +1,5 @@
 name: Build and Push Custom Caddy
 
-# 触发条件配置
 on:
   push:
     branches: 

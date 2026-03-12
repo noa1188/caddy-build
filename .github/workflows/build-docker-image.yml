@@ -1,0 +1,62 @@
+name: Build and Push Custom Caddy
+
+# 触发条件配置
+on:
+  push:
+    branches: 
+      - main          # 每次推送到 main 分支时自动触发 (生成 latest 标签)
+    tags: 
+      - 'v*.*.*'      # 当推送类似 v1.0.0 的 Tag 时触发 (生成对应版本标签)
+  workflow_dispatch:  # 允许在 GitHub 网页的 Actions 面板中手动点击 "Run workflow" 触发
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. 拉取当前 GitHub 仓库的代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. 安装 QEMU (用于支持在 Ubuntu x86 机器上交叉编译 ARM64 架构)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      # 3. 设置 Docker Buildx (支持多架构并行构建的高级构建引擎)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4. 登录到 Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 5. 自动提取并生成 Docker 镜像的 Tag 和 Labels
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # 注意：这里会通过你的 Secret 自动拼接出 "用户名/caddy-cloudflare-desec" 作为镜像名
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/caddy-cloudflare-desec
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=sha,format=short
+
+      # 6. 执行编译并推送到 Docker Hub
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # 核心：同时编译输出给普通 VPS(amd64) 和 Oracle Cloud(arm64) 的镜像
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 开启 GitHub Actions 的缓存功能，大幅缩短以后每次编译的时间
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -34,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/caddy-cloudflare-desec
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/caddy-cloudflare-desec-webdav
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag

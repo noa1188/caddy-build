@@ -24,9 +24,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
       - name: Check latest stable Caddy version
         id: version_check
         shell: bash
@@ -36,10 +33,12 @@ jobs:
           CURRENT_VERSION="$(grep -oP '(?<=^ARG CADDY_VERSION=).*' "$DOCKERFILE_PATH")"
           echo "Current version: $CURRENT_VERSION"
 
+          PAGE_HTML="$(curl --retry 3 --retry-delay 5 --connect-timeout 10 --max-time 60 -fsSL https://hub.docker.com/_/caddy)"
+
           LATEST_VERSION="$(
-            curl -fsSL 'https://registry.hub.docker.com/v2/repositories/library/caddy/tags?page_size=100' \
-              | jq -r '.results[].name' \
-              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            printf '%s\n' "$PAGE_HTML" \
+              | grep -oE '`[0-9]+\.[0-9]+\.[0-9]+`' \
+              | tr -d '`' \
               | sort -V \
               | tail -n 1
           )"
@@ -70,7 +69,6 @@ jobs:
           commit-message: "chore: bump Caddy to ${{ steps.version_check.outputs.latest_version }}"
           committer: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
           author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
-          signoff: false
           branch: "chore/bump-caddy-${{ steps.version_check.outputs.latest_version }}"
           delete-branch: true
           title: "chore: bump Caddy to ${{ steps.version_check.outputs.latest_version }}"

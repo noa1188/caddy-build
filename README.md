@@ -2,12 +2,6 @@
 
 ```
 https://caddyserver.com/download
-
-https://github.com/caddy-dns/cloudflare
-
-https://github.com/caddy-dns/desec
-
-https://github.com/mholt/caddy-webdav
 ```
 First, create the docker network:
 ```

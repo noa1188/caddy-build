@@ -39,8 +39,8 @@ ARG CADDY_VERSION=2.11.4
 #   ARG PLUGIN_CLOUDFLARE=v1.0.0
 #   ARG PLUGIN_DESEC=v0.2.0
 # ------------------------------------------------------------------------------
-ARG PLUGIN_CLOUDFLARE=vX.Y.Z
-ARG PLUGIN_DESEC=vX.Y.Z
+ARG PLUGIN_CLOUDFLARE=v0.2.4
+ARG PLUGIN_DESEC=v1.1.0
 
 # ------------------------------------------------------------------------------
 # Tier 2: Smaller third-party plugin
@@ -50,7 +50,7 @@ ARG PLUGIN_DESEC=vX.Y.Z
 #   ARG PLUGIN_CLOUDFLARE_IP=f53b62a
 #   ARG PLUGIN_CLOUDFLARE_IP=1a2b3c4d5e6f
 # ------------------------------------------------------------------------------
-ARG PLUGIN_CLOUDFLARE_IP=COMMIT_SHA
+ARG PLUGIN_CLOUDFLARE_IP=f53b62aa13cb7ad79c8b47aacc3f2f03989b67e5
 
 # ------------------------------------------------------------------------------
 # Tier 3: Utility plugins
@@ -65,8 +65,8 @@ ARG PLUGIN_CLOUDFLARE_IP=COMMIT_SHA
 #   ARG PLUGIN_COMBINE_IP_RANGES=abc1234
 #   ARG PLUGIN_WEBDAV=def5678
 # ------------------------------------------------------------------------------
-ARG PLUGIN_COMBINE_IP_RANGES=REF_VALUE
-ARG PLUGIN_WEBDAV=REF_VALUE
+ARG PLUGIN_COMBINE_IP_RANGES=5624d08f5f9e788816bdd877b7c81280c69b434e
+ARG PLUGIN_WEBDAV=fa2f366b0d75e54c2e381c0aefc3a8df8bf5794b
 
 # ------------------------------------------------------------------------------
 # Build stage

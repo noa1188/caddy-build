@@ -19,18 +19,16 @@ jobs:
 
     env:
       DOCKERFILE_PATH: ./Dockerfile
-      BRANCH_PREFIX: chore/bump-caddy
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y jq gh
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Check latest stable Caddy version
+        id: version_check
         shell: bash
         run: |
           set -euo pipefail
@@ -54,36 +52,35 @@ jobs:
           echo "Latest stable version: $LATEST_VERSION"
 
           if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
-            echo "No update needed."
+            echo "updated=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           sed -i "s/^ARG CADDY_VERSION=$CURRENT_VERSION$/ARG CADDY_VERSION=$LATEST_VERSION/" "$DOCKERFILE_PATH"
 
-          BRANCH_NAME="${BRANCH_PREFIX}-${LATEST_VERSION}"
+          echo "updated=true" >> "$GITHUB_OUTPUT"
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "latest_version=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Create pull request
+        if: steps.version_check.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: bump Caddy to ${{ steps.version_check.outputs.latest_version }}"
+          committer: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          signoff: false
+          branch: "chore/bump-caddy-${{ steps.version_check.outputs.latest_version }}"
+          delete-branch: true
+          title: "chore: bump Caddy to ${{ steps.version_check.outputs.latest_version }}"
+          body: |
+            Automated update of `ARG CADDY_VERSION` in `Dockerfile`.
 
-          git checkout -b "$BRANCH_NAME"
-          git add "$DOCKERFILE_PATH"
-          git commit -m "chore: bump Caddy to $LATEST_VERSION"
-          git push --set-upstream origin "$BRANCH_NAME"
+            - Previous version: `${{ steps.version_check.outputs.current_version }}`
+            - New version: `${{ steps.version_check.outputs.latest_version }}`
 
-          if gh pr list --head "$BRANCH_NAME" --json number --jq 'length' | grep -q '^0$'; then
-            gh pr create \
-              --base main \
-              --head "$BRANCH_NAME" \
-              --title "chore: bump Caddy to $LATEST_VERSION" \
-              --body "Automated update of \`ARG CADDY_VERSION\` in \`Dockerfile\`.
-
-- Previous version: \`$CURRENT_VERSION\`
-- New version: \`$LATEST_VERSION\`
-
-Review plugin compatibility, merge this PR, then create tag:
-\`v$LATEST_VERSION\`"
-          else
-            echo "PR already exists for $BRANCH_NAME"
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            Suggested next steps:
+            1. Review the PR diff.
+            2. Merge the PR if plugin compatibility looks good.
+            3. Create and push tag `v${{ steps.version_check.outputs.latest_version }}` to trigger release workflow.

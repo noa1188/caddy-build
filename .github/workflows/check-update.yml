@@ -1,0 +1,71 @@
+name: Check Caddy Update
+
+on:
+  schedule:
+    - cron: "5 1 */5 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: check-caddy-update
+  cancel-in-progress: false
+
+jobs:
+  check-update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      DOCKERFILE_PATH: ./Dockerfile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Check latest stable Caddy version
+        id: version_check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CURRENT_VERSION="$(grep -oP '(?<=^ARG CADDY_VERSION=).*' "$DOCKERFILE_PATH")"
+          echo "Current version: $CURRENT_VERSION"
+
+          LATEST_VERSION="$(
+            curl -fsSL 'https://registry.hub.docker.com/v2/repositories/library/caddy/tags?page_size=100' \
+              | jq -r '.results[].name' \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sort -V \
+              | tail -n 1
+          )"
+
+          if [ -z "$LATEST_VERSION" ]; then
+            echo "Failed to resolve latest stable Caddy version."
+            exit 1
+          fi
+
+          echo "Latest stable version: $LATEST_VERSION"
+
+          if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
+            echo "No update needed."
+            echo "UPDATED=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          sed -i "s/^ARG CADDY_VERSION=$CURRENT_VERSION$/ARG CADDY_VERSION=$LATEST_VERSION/" "$DOCKERFILE_PATH"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add "$DOCKERFILE_PATH"
+          git commit -m "chore: bump Caddy to $LATEST_VERSION [skip ci]"
+          git push
+
+          echo "UPDATED=true" >> "$GITHUB_ENV"
+          echo "LATEST_VERSION=$LATEST_VERSION" >> "$GITHUB_ENV"

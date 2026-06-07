@@ -15,9 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
 
     env:
       DOCKERFILE_PATH: ./Dockerfile
+      BRANCH_PREFIX: chore/bump-caddy
 
     steps:
       - name: Checkout repository
@@ -25,11 +27,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq gh
 
       - name: Check latest stable Caddy version
-        id: version_check
         shell: bash
         run: |
           set -euo pipefail
@@ -54,18 +55,35 @@ jobs:
 
           if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
             echo "No update needed."
-            echo "UPDATED=false" >> "$GITHUB_ENV"
             exit 0
           fi
 
           sed -i "s/^ARG CADDY_VERSION=$CURRENT_VERSION$/ARG CADDY_VERSION=$LATEST_VERSION/" "$DOCKERFILE_PATH"
 
+          BRANCH_NAME="${BRANCH_PREFIX}-${LATEST_VERSION}"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          git checkout -b "$BRANCH_NAME"
           git add "$DOCKERFILE_PATH"
-          git commit -m "chore: bump Caddy to $LATEST_VERSION [skip ci]"
-          git push
+          git commit -m "chore: bump Caddy to $LATEST_VERSION"
+          git push --set-upstream origin "$BRANCH_NAME"
 
-          echo "UPDATED=true" >> "$GITHUB_ENV"
-          echo "LATEST_VERSION=$LATEST_VERSION" >> "$GITHUB_ENV"
+          if gh pr list --head "$BRANCH_NAME" --json number --jq 'length' | grep -q '^0$'; then
+            gh pr create \
+              --base main \
+              --head "$BRANCH_NAME" \
+              --title "chore: bump Caddy to $LATEST_VERSION" \
+              --body "Automated update of \`ARG CADDY_VERSION\` in \`Dockerfile\`.
+
+- Previous version: \`$CURRENT_VERSION\`
+- New version: \`$LATEST_VERSION\`
+
+Review plugin compatibility, merge this PR, then create tag:
+\`v$LATEST_VERSION\`"
+          else
+            echo "PR already exists for $BRANCH_NAME"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

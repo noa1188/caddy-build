@@ -1,11 +1,77 @@
+# ------------------------------------------------------------------------------
+# Custom Caddy build with pinned plugin references
+#
+# Maintenance rules:
+# 1. CADDY_VERSION:
+#    - This is the upstream Caddy core version.
+#    - It is suitable for automated bumping by GitHub Actions.
+#    - Example: 2.11.4
+#
+# 2. Core DNS plugins:
+#    - Prefer stable Git tags.
+#    - Example tag format: v1.2.3
+#
+# 3. Smaller third-party plugins without clear release practice:
+#    - Prefer exact commit SHA.
+#    - Example commit format: f53b62a
+#
+# 4. Utility plugins:
+#    - Use a verified tag if available.
+#    - Otherwise pin an exact commit SHA.
+#
+# 5. Do not leave plugin refs unpinned in production.
+#    - Bad: --with github.com/owner/plugin
+#    - Good: --with github.com/owner/plugin@v1.2.3
+#    - Good: --with github.com/owner/plugin@abcdef1
+# ------------------------------------------------------------------------------
+
+# Upstream Caddy core version.
+# Example:
+#   ARG CADDY_VERSION=2.11.4
 ARG CADDY_VERSION=2.11.4
 
-ARG PLUGIN_CLOUDFLARE=v1.6.0
-ARG PLUGIN_DESEC=v0.0.0
-ARG PLUGIN_CLOUDFLARE_IP=<PINNED_TAG_OR_COMMIT>
-ARG PLUGIN_COMBINE_IP_RANGES=<PINNED_TAG_OR_COMMIT>
-ARG PLUGIN_WEBDAV=v0.0.4
+# ------------------------------------------------------------------------------
+# Tier 1: Core DNS plugins
+# These are critical for ACME DNS challenge and certificate automation.
+# Prefer Git tags first, because they have clearer upgrade semantics.
+#
+# Example values:
+#   ARG PLUGIN_CLOUDFLARE=v1.0.0
+#   ARG PLUGIN_DESEC=v0.2.0
+# ------------------------------------------------------------------------------
+ARG PLUGIN_CLOUDFLARE=vX.Y.Z
+ARG PLUGIN_DESEC=vX.Y.Z
 
+# ------------------------------------------------------------------------------
+# Tier 2: Smaller third-party plugin
+# Prefer exact commit SHA when release/tag practice is weak or unclear.
+#
+# Example values:
+#   ARG PLUGIN_CLOUDFLARE_IP=f53b62a
+#   ARG PLUGIN_CLOUDFLARE_IP=1a2b3c4d5e6f
+# ------------------------------------------------------------------------------
+ARG PLUGIN_CLOUDFLARE_IP=COMMIT_SHA
+
+# ------------------------------------------------------------------------------
+# Tier 3: Utility plugins
+# Use a verified Git tag if the project maintains tags you trust.
+# Otherwise use an exact commit SHA.
+#
+# Example tag values:
+#   ARG PLUGIN_COMBINE_IP_RANGES=v0.1.0
+#   ARG PLUGIN_WEBDAV=v0.3.0
+#
+# Example commit values:
+#   ARG PLUGIN_COMBINE_IP_RANGES=abc1234
+#   ARG PLUGIN_WEBDAV=def5678
+# ------------------------------------------------------------------------------
+ARG PLUGIN_COMBINE_IP_RANGES=REF_VALUE
+ARG PLUGIN_WEBDAV=REF_VALUE
+
+# ------------------------------------------------------------------------------
+# Build stage
+# We build a custom caddy binary with xcaddy and pinned plugin references.
+# ------------------------------------------------------------------------------
 FROM caddy:${CADDY_VERSION}-builder AS builder
 
 ARG CADDY_VERSION
@@ -22,11 +88,22 @@ RUN xcaddy build "v${CADDY_VERSION}" \
     --with github.com/fvbommel/caddy-combine-ip-ranges@${PLUGIN_COMBINE_IP_RANGES} \
     --with github.com/mholt/caddy-webdav@${PLUGIN_WEBDAV}
 
+# ------------------------------------------------------------------------------
+# Runtime stage
+# Keep the final image small by copying only the built caddy binary.
+# ------------------------------------------------------------------------------
 FROM caddy:${CADDY_VERSION}-alpine
 
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 
-RUN /usr/bin/caddy version && /usr/bin/caddy list-modules
+# Basic validation during image build:
+# - caddy version: confirms the binary exists and runs
+# - caddy list-modules: confirms plugins were built into the binary
+RUN /usr/bin/caddy version \
+ && /usr/bin/caddy list-modules
 
+# Default container behavior:
+# - ENTRYPOINT keeps caddy as the main executable
+# - CMD can be overridden by docker run / compose / kubernetes
 ENTRYPOINT ["/usr/bin/caddy"]
 CMD ["version"]
